@@ -5,13 +5,53 @@
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 		<link type="text/css" rel="stylesheet" href="main.css">
+		<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.0/jquery.min.js" integrity="sha512-3gJwYpMe3QewGELv8k/BX9vcqhryRdzRMxVfq6ngyWXwo03GFEzjsUm8Q7RZcHPHksttq7/GFoxjCVUjkjvPdw==" 
+		crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 	</head>
 	<body>
+		<div class="w3-sidebar w3-bar-block w3-card w3-animate-left" style="display:none" id="leftMenu">
+			<button onclick="closeLeftMenu()" class="w3-bar-item w3-button w3-large">Close &times;</button>
+			<a href="#" class="w3-bar-item w3-button" id="1">Link 1</a>
+			<a href="#" class="w3-bar-item w3-button" id="2">Link 2</a>
+			<a href="#" class="w3-bar-item w3-button" id="3">Link 3</a>
+		  </div>
+		  
+		  <div class="w3-sidebar w3-bar-block w3-card w3-animate-right" style="display:none;right:0;" id="rightMenu">
+			<button onclick="closeRightMenu()" class="w3-bar-item w3-button w3-large">Close &times;</button>
+			<a href="#" class="w3-bar-item w3-button" id="1">Link 1</a>
+			<a href="#" class="w3-bar-item w3-button" id="2">Link 2</a>
+			<a href="#" class="w3-bar-item w3-button" id="3">Link 3</a>
+		  </div>
+		  
+		  <div class="w3-teal">
+			<button class="w3-button w3-teal w3-xlarge w3-left" onclick="openLeftMenu()">&#9776;</button>
+			<button class="w3-button w3-teal w3-xlarge w3-right" onclick="openRightMenu()">&#9776;</button>
+			
+		  </div>
+		   
 
-		<div id="info">
-			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> ar - hit test<br/>(Chrome Android 81+)
-		</div>
 
+		  <div id="container" style="background-color: aqua; position: fixed;"></div>
+			   
+		  <script>
+		  function openLeftMenu() {
+			document.getElementById("leftMenu").style.display = "block";
+		  }
+		  
+		  function closeLeftMenu() {
+			document.getElementById("leftMenu").style.display = "none";
+		  }
+		  
+		  function openRightMenu() {
+			document.getElementById("rightMenu").style.display = "block";
+		  }
+		  
+		  function closeRightMenu() {
+			document.getElementById("rightMenu").style.display = "none";
+		  }
+		  </script>
+			   
 		<!-- Import maps polyfill -->
 		<!-- Remove this when import maps will be widely supported -->
 		<script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
@@ -26,13 +66,16 @@
 		<script type="module">
 			import * as THREE from  './build/three.module.js';
 			import {ARButton} from './jsm/webxr/ARButton.js';
-
+			import {OrbitControls} from './jsm/controls/OrbitControls.js';
+			import {GLTFLoader} from './jsm/loaders/GLTFLoader.js';
+			import {RGBELoader} from './jsm/loaders/RGBELoader.js';
+			import {RoughnessMipmapper} from './jsm/utils/RoughnessMipmapper';
 
 			let container;
 			let camera, scene, renderer;
 			let controller;
 
-			let reticle;
+			let reticle , pmremGenerator,current_object,controls;
 
 			let hitTestSource = null;
 			let hitTestSourceRequested = false;
@@ -40,14 +83,37 @@
 			init();
 			animate();
 
+			$(".w3-button").click(function(){
+				loadModel($(this).attr("id"));
+			});
+			function loadModel(model){
+				new RGBELoader()
+				.setDataType(THREE.UnsignedBytetype)
+				.setPath('textures/')
+				.load('photo_studio_01_1k.hdr' , function(texture){
+					var envmap=pmremGenerator.fromEquirectangular(texture).texture;
+					scene.enviroment=envmap;
+					texture.dispose();
+					pmremGenerator.dispose();
+					render();
+
+					var loader= new GLTFLoader().setPath('3d/');
+					loader.load(model + ".glb" , function(glb){
+						current_object=glb.scene;
+						scene.add(current_object);
+						render();
+					});
+				});
+			}
+
 			function init() {
 
 				container = document.createElement( 'div' );
 				document.body.appendChild( container );
-
+				document.getElementById("container").appendChild(container);
 				scene = new THREE.Scene();
 
-				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 20 );
+				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.001, 200);
 
 				const light = new THREE.HemisphereLight( 0xffffff, 0xbbbbff, 3 );
 				light.position.set( 0.5, 1, 0.25 );
@@ -60,7 +126,13 @@
 				renderer.setSize( window.innerWidth, window.innerHeight );
 				renderer.xr.enabled = true;
 				container.appendChild( renderer.domElement );
-
+				pmremGenerator=new THREE.PMREMGenerator(renderer);
+				pmremGenerator.compileEquirectangularShader();
+				controls=new OrbitControls(camera,renderer.domElement);
+				controls.addEventListener('change' ,render);
+				controls.minDistance=2;
+				controller.maxDistance=10;
+				controls.target.set(0 ,0, -0.2);
 				//
 
 				document.body.appendChild( ARButton.createButton( renderer, { requiredFeatures: [ 'hit-test' ] } ) );
